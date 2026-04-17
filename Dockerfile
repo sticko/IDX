@@ -2,7 +2,6 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies for pdfplumber
 RUN apt-get update && apt-get install -y \
     libpoppler-cpp-dev \
     poppler-utils \
@@ -13,9 +12,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# Create required dirs
 RUN mkdir -p downloads results static
 
-EXPOSE 8080
-
-CMD ["python", "server.py"]
+# Shell form ensures $PORT expands correctly
+CMD gunicorn --bind 0.0.0.0:${PORT:-8080} --timeout 120 --workers 1 --access-logfile - --error-logfile - server:app

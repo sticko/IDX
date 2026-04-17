@@ -1,14 +1,36 @@
+import os, sys, traceback
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
-import os, sys
 
-sys.path.insert(0, os.path.dirname(__file__))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from idx_fetcher import fetch_idx_pdf
-from pdf_parser import parse_shareholder_pdf
+# Ensure writable dirs exist BEFORE importing heavy modules
+os.makedirs("downloads", exist_ok=True)
+os.makedirs("results", exist_ok=True)
+os.makedirs("static", exist_ok=True)
 
 app = Flask(__name__, static_folder="static", static_url_path="")
 CORS(app)
+
+# Defer heavy imports so health endpoint always works
+_fetch_idx_pdf = None
+_parse_shareholder_pdf = None
+_import_error = None
+
+def _lazy_import():
+    global _fetch_idx_pdf, _parse_shareholder_pdf, _import_error
+    if _fetch_idx_pdf is not None:
+        return True
+    try:
+        from idx_fetcher import fetch_idx_pdf
+        from pdf_parser import parse_shareholder_pdf
+        _fetch_idx_pdf = fetch_idx_pdf
+        _parse_shareholder_pdf = parse_shareholder_pdf
+        return True
+    except Exception as e:
+        _import_error = f"{e}\n{traceback.format_exc()}"
+        print(f"[IMPORT ERROR] {_import_error}", flush=True)
+        return False
 
 
 @app.route("/health")
@@ -18,11 +40,16 @@ def health():
 
 @app.route("/")
 def index():
-    return send_from_directory("static", "index.html")
+    if os.path.exists(os.path.join("static", "index.html")):
+        return send_from_directory("static", "index.html")
+    return "<h1>IDX Parser</h1><p>Static index.html not found. Check your repo.</p>", 200
 
 
 @app.route("/api/fetch", methods=["POST"])
 def fetch():
+    if not _lazy_import():
+        return jsonify({"error": f"Server module failed to load: {_import_error}"}), 500
+
     body = request.get_json(force=True, silent=True) or {}
     mode = body.get("mode", "latest")
     exact_date = None
@@ -38,7 +65,7 @@ def fetch():
             return jsonify({"error": "Date must be YYYY-MM-DD"}), 400
 
     try:
-        result = fetch_idx_pdf(exact_date=exact_date)
+        result = _fetch_idx_pdf(exact_date=exact_date)
     except ValueError as e:
         return jsonify({"error": str(e)}), 404
     except Exception as e:
@@ -46,8 +73,8 @@ def fetch():
 
     try:
         log_messages = []
-        df = parse_shareholder_pdf(result["savedPath"],
-                                   log_callback=lambda m: log_messages.append(m))
+        df = _parse_shareholder_pdf(result["savedPath"],
+                                    log_callback=lambda m: log_messages.append(m))
     except Exception as e:
         return jsonify({"error": f"Parse error: {e}"}), 500
 
