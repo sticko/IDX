@@ -111,7 +111,7 @@
     flex: 1;
     padding: 9px 0;
     font-family: var(--mono);
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 500;
     letter-spacing: 0.05em;
     border-radius: var(--radius);
@@ -163,6 +163,43 @@
   }
   .date-input:focus {
     border-color: var(--accent2);
+  }
+
+  .upload-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    overflow: hidden;
+    max-height: 0;
+    opacity: 0;
+    transition: max-height 0.25s ease, opacity 0.2s ease;
+  }
+  .upload-row.visible {
+    max-height: 48px;
+    opacity: 1;
+  }
+  .upload-btn {
+    flex: 1;
+    padding: 10px 12px;
+    background: var(--bg);
+    border: 1px dashed var(--border2);
+    border-radius: var(--radius);
+    color: var(--text2);
+    font-family: var(--mono);
+    font-size: 12px;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.15s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .upload-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .upload-btn.has-file {
+    border-style: solid;
+    border-color: var(--accent);
+    color: var(--accent);
   }
 
   .action-row {
@@ -224,15 +261,6 @@
     font-size: 11px;
     color: var(--text2);
     letter-spacing: 0.04em;
-  }
-
-  .status-text {
-    margin-left: auto;
-    font-family: var(--mono);
-    font-size: 11px;
-    color: var(--accent2);
-    letter-spacing: 0.04em;
-    white-space: nowrap;
   }
 
   .meta-bar {
@@ -318,7 +346,7 @@
     font-size: 12px;
     color: var(--text3);
     line-height: 1.6;
-    max-width: 240px;
+    max-width: 260px;
   }
 
   table {
@@ -464,6 +492,8 @@
     line-height: 1.7;
   }
   .log-entry::before { content: '› '; color: var(--accent); }
+
+  .hidden-input { display: none; }
 </style>
 </head>
 <body>
@@ -483,7 +513,8 @@
   <div class="controls">
     <div class="mode-row">
       <button class="mode-btn active" id="btn-latest" onclick="setMode('latest')">⚡ Latest</button>
-      <button class="mode-btn" id="btn-exact" onclick="setMode('exact')">📅 Exact Date</button>
+      <button class="mode-btn" id="btn-exact" onclick="setMode('exact')">📅 Exact</button>
+      <button class="mode-btn" id="btn-upload" onclick="setMode('upload')">📎 Upload</button>
     </div>
 
     <div class="date-row" id="date-row">
@@ -491,8 +522,13 @@
       <input class="date-input" type="date" id="date-input"/>
     </div>
 
+    <div class="upload-row" id="upload-row">
+      <label class="upload-btn" id="upload-label" for="file-input">Tap to select PDF…</label>
+      <input class="hidden-input" type="file" id="file-input" accept="application/pdf" onchange="onFilePick(this)"/>
+    </div>
+
     <div class="action-row">
-      <button class="fetch-btn" id="fetch-btn" onclick="doFetch()">FETCH</button>
+      <button class="fetch-btn" id="fetch-btn" onclick="doFetch()">RUN</button>
 
       <div class="view-toggle" onclick="toggleView()">
         <div class="toggle-track on" id="toggle-track">
@@ -500,8 +536,6 @@
         </div>
         <span class="view-toggle-label">SIMPLE</span>
       </div>
-
-      <span class="status-text" id="status-text"></span>
     </div>
   </div>
 
@@ -529,7 +563,7 @@
     <div class="empty-state" id="empty-state">
       <div class="empty-icon">📊</div>
       <div class="empty-title">No data loaded</div>
-      <div class="empty-sub">Tap Fetch to pull the latest shareholder disclosure from IDX.</div>
+      <div class="empty-sub">Use Latest/Exact to fetch from IDX, or Upload to parse a PDF you already have.</div>
     </div>
   </div>
 
@@ -537,7 +571,7 @@
 
 <div class="spinner-overlay" id="spinner">
   <div class="spinner-ring"></div>
-  <div class="spinner-label" id="spinner-label">Fetching from IDX…</div>
+  <div class="spinner-label" id="spinner-label">Processing…</div>
 </div>
 
 <div class="log-drawer" id="log-drawer">
@@ -553,6 +587,7 @@
   let simpleView = true;
   let allColumns = [];
   let allRows = [];
+  let selectedFile = null;
 
   const SIMPLE_COLS = ['No', 'Nama Pemegang Rekening Efek', 'Perubahan'];
   const API_BASE = window.location.origin;
@@ -568,7 +603,9 @@
     mode = m;
     document.getElementById('btn-latest').classList.toggle('active', m === 'latest');
     document.getElementById('btn-exact').classList.toggle('active', m === 'exact');
+    document.getElementById('btn-upload').classList.toggle('active', m === 'upload');
     document.getElementById('date-row').classList.toggle('visible', m === 'exact');
+    document.getElementById('upload-row').classList.toggle('visible', m === 'upload');
   }
 
   function toggleView() {
@@ -577,10 +614,43 @@
     if (allRows.length) renderTable(allColumns, allRows);
   }
 
+  function onFilePick(input) {
+    const file = input.files && input.files[0];
+    const label = document.getElementById('upload-label');
+    if (file) {
+      selectedFile = file;
+      label.textContent = `📄 ${file.name}`;
+      label.classList.add('has-file');
+    } else {
+      selectedFile = null;
+      label.textContent = 'Tap to select PDF…';
+      label.classList.remove('has-file');
+    }
+  }
+
   async function doFetch() {
     hideError();
-    setSpinner(true, 'Fetching from IDX…');
 
+    if (mode === 'upload') {
+      if (!selectedFile) { showError('Please select a PDF file first.'); return; }
+      setSpinner(true, 'Uploading & parsing…');
+      try {
+        const fd = new FormData();
+        fd.append('file', selectedFile);
+        const res = await fetch(`${API_BASE}/api/upload`, { method: 'POST', body: fd });
+        const data = await res.json();
+        if (!res.ok) { showError(data.error || 'Upload failed'); return; }
+        handleData(data);
+      } catch (e) {
+        showError(`Network error: ${e.message}`);
+      } finally {
+        setSpinner(false);
+      }
+      return;
+    }
+
+    // Latest or exact
+    setSpinner(true, 'Fetching from IDX…');
     const body = { mode };
     if (mode === 'exact') {
       body.date = document.getElementById('date-input').value.trim();
@@ -593,31 +663,32 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
       });
-
       const data = await res.json();
-
-      if (!res.ok) { showError(data.error || 'Unknown error'); setSpinner(false); return; }
-
-      document.getElementById('meta-filename').textContent = data.meta.fileName || '—';
-      document.getElementById('meta-date').textContent =
-        (data.meta.announcementDate || '—').substring(0, 10);
-      document.getElementById('meta-rows').textContent = data.totalRows;
-      document.getElementById('meta-bar').classList.add('visible');
-
-      allColumns = data.columns;
-      allRows = data.rows;
-      renderTable(allColumns, allRows);
-
-      if (data.logs && data.logs.length) {
-        const lb = document.getElementById('log-body');
-        lb.innerHTML = data.logs.map(l =>
-          `<div class="log-entry">${escHtml(l)}</div>`).join('');
-        document.getElementById('log-drawer').classList.add('open');
-      }
+      if (!res.ok) { showError(data.error || 'Unknown error'); return; }
+      handleData(data);
     } catch (e) {
       showError(`Network error: ${e.message}`);
     } finally {
       setSpinner(false);
+    }
+  }
+
+  function handleData(data) {
+    document.getElementById('meta-filename').textContent = data.meta.fileName || '—';
+    document.getElementById('meta-date').textContent =
+      (data.meta.announcementDate || '—').substring(0, 10) || '—';
+    document.getElementById('meta-rows').textContent = data.totalRows;
+    document.getElementById('meta-bar').classList.add('visible');
+
+    allColumns = data.columns;
+    allRows = data.rows;
+    renderTable(allColumns, allRows);
+
+    if (data.logs && data.logs.length) {
+      const lb = document.getElementById('log-body');
+      lb.innerHTML = data.logs.map(l =>
+        `<div class="log-entry">${escHtml(l)}</div>`).join('');
+      document.getElementById('log-drawer').classList.add('open');
     }
   }
 
