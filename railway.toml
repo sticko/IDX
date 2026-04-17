@@ -2,7 +2,7 @@
 builder = "dockerfile"
 
 [deploy]
-startCommand = "python server.py"
-healthcheckPath = "/"
-healthcheckTimeout = 30
+startCommand = "gunicorn --bind 0.0.0.0:$PORT --timeout 120 --workers 1 server:app"
+healthcheckPath = "/health"
+healthcheckTimeout = 120
 restartPolicyType = "on_failure"
