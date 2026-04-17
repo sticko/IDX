@@ -14,6 +14,7 @@
     --border2:   #272c35;
     --accent:    #00c896;
     --accent2:   #0087ff;
+    --accent3:   #ffb020;
     --warn:      #ff4d4d;
     --warn-soft: rgba(255,77,77,0.12);
     --pos:       #00c896;
@@ -104,16 +105,16 @@
 
   .mode-row {
     display: flex;
-    gap: 8px;
+    gap: 6px;
   }
 
   .mode-btn {
     flex: 1;
-    padding: 9px 0;
+    padding: 9px 4px;
     font-family: var(--mono);
     font-size: 11px;
     font-weight: 500;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.03em;
     border-radius: var(--radius);
     border: 1px solid var(--border2);
     background: transparent;
@@ -122,13 +123,23 @@
     transition: all 0.18s ease;
     -webkit-tap-highlight-color: transparent;
   }
-  .mode-btn.active {
+  .mode-btn.active.latest {
     background: rgba(0,200,150,0.12);
     border-color: rgba(0,200,150,0.4);
     color: var(--accent);
   }
+  .mode-btn.active.exact {
+    background: rgba(0,135,255,0.12);
+    border-color: rgba(0,135,255,0.4);
+    color: var(--accent2);
+  }
+  .mode-btn.active.upload {
+    background: rgba(255,176,32,0.12);
+    border-color: rgba(255,176,32,0.4);
+    color: var(--accent3);
+  }
 
-  .date-row {
+  .date-row, .upload-row {
     display: flex;
     align-items: center;
     gap: 8px;
@@ -137,8 +148,8 @@
     opacity: 0;
     transition: max-height 0.25s ease, opacity 0.2s ease;
   }
-  .date-row.visible {
-    max-height: 48px;
+  .date-row.visible, .upload-row.visible {
+    max-height: 60px;
     opacity: 1;
   }
   .date-label {
@@ -159,48 +170,29 @@
     padding: 8px 10px;
     outline: none;
     -webkit-appearance: none;
-    transition: border-color 0.15s;
   }
-  .date-input:focus {
-    border-color: var(--accent2);
-  }
+  .date-input:focus { border-color: var(--accent2); }
 
-  .upload-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    overflow: hidden;
-    max-height: 0;
-    opacity: 0;
-    transition: max-height 0.25s ease, opacity 0.2s ease;
-  }
-  .upload-row.visible {
-    max-height: 48px;
-    opacity: 1;
-  }
-  .upload-btn {
+  .file-btn {
     flex: 1;
-    padding: 10px 12px;
+    padding: 9px 12px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.04em;
     background: var(--bg);
     border: 1px dashed var(--border2);
     border-radius: var(--radius);
     color: var(--text2);
-    font-family: var(--mono);
-    font-size: 12px;
     cursor: pointer;
     text-align: center;
-    transition: all 0.15s;
     -webkit-tap-highlight-color: transparent;
   }
-  .upload-btn:hover {
-    border-color: var(--accent);
-    color: var(--accent);
-  }
-  .upload-btn.has-file {
+  .file-btn.has-file {
     border-style: solid;
-    border-color: var(--accent);
-    color: var(--accent);
+    border-color: var(--accent3);
+    color: var(--accent3);
   }
+  .file-input-hidden { display: none; }
 
   .action-row {
     display: flex;
@@ -221,9 +213,10 @@
     border: none;
     border-radius: var(--radius);
     cursor: pointer;
-    transition: opacity 0.15s, transform 0.1s;
+    transition: opacity 0.15s, transform 0.1s, background 0.2s;
     -webkit-tap-highlight-color: transparent;
   }
+  .fetch-btn.upload-mode { background: var(--accent3); }
   .fetch-btn:active { transform: scale(0.97); }
   .fetch-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
@@ -274,11 +267,7 @@
     align-items: center;
   }
   .meta-bar.visible { display: flex; }
-  .meta-item {
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-  }
+  .meta-item { display: flex; flex-direction: column; gap: 1px; }
   .meta-key {
     font-family: var(--mono);
     font-size: 9px;
@@ -290,6 +279,7 @@
     font-family: var(--mono);
     font-size: 11px;
     color: var(--accent2);
+    word-break: break-all;
   }
 
   .error-banner {
@@ -346,7 +336,7 @@
     font-size: 12px;
     color: var(--text3);
     line-height: 1.6;
-    max-width: 260px;
+    max-width: 280px;
   }
 
   table {
@@ -356,11 +346,7 @@
     font-family: var(--mono);
     font-size: 12px;
   }
-  thead {
-    position: sticky;
-    top: 0;
-    z-index: 10;
-  }
+  thead { position: sticky; top: 0; z-index: 10; }
   thead th {
     background: #0f1216;
     color: var(--text3);
@@ -377,10 +363,7 @@
   thead th:last-child { border-right: none; }
   thead th.num { text-align: right; }
 
-  tbody tr {
-    border-bottom: 1px solid var(--border);
-    transition: background 0.1s;
-  }
+  tbody tr { border-bottom: 1px solid var(--border); transition: background 0.1s; }
   tbody tr:hover { background: rgba(255,255,255,0.02); }
 
   tbody td {
@@ -492,8 +475,6 @@
     line-height: 1.7;
   }
   .log-entry::before { content: '› '; color: var(--accent); }
-
-  .hidden-input { display: none; }
 </style>
 </head>
 <body>
@@ -512,9 +493,9 @@
 
   <div class="controls">
     <div class="mode-row">
-      <button class="mode-btn active" id="btn-latest" onclick="setMode('latest')">⚡ Latest</button>
-      <button class="mode-btn" id="btn-exact" onclick="setMode('exact')">📅 Exact</button>
-      <button class="mode-btn" id="btn-upload" onclick="setMode('upload')">📎 Upload</button>
+      <button class="mode-btn latest active" id="btn-latest" onclick="setMode('latest')">⚡ Latest</button>
+      <button class="mode-btn exact" id="btn-exact" onclick="setMode('exact')">📅 Date</button>
+      <button class="mode-btn upload" id="btn-upload" onclick="setMode('upload')">📄 Upload</button>
     </div>
 
     <div class="date-row" id="date-row">
@@ -523,12 +504,12 @@
     </div>
 
     <div class="upload-row" id="upload-row">
-      <label class="upload-btn" id="upload-label" for="file-input">Tap to select PDF…</label>
-      <input class="hidden-input" type="file" id="file-input" accept="application/pdf" onchange="onFilePick(this)"/>
+      <label for="file-input" class="file-btn" id="file-btn">TAP TO SELECT PDF</label>
+      <input type="file" id="file-input" class="file-input-hidden" accept="application/pdf,.pdf"/>
     </div>
 
     <div class="action-row">
-      <button class="fetch-btn" id="fetch-btn" onclick="doFetch()">RUN</button>
+      <button class="fetch-btn" id="fetch-btn" onclick="doAction()">FETCH</button>
 
       <div class="view-toggle" onclick="toggleView()">
         <div class="toggle-track on" id="toggle-track">
@@ -541,7 +522,7 @@
 
   <div class="meta-bar" id="meta-bar">
     <div class="meta-item">
-      <span class="meta-key">Filename</span>
+      <span class="meta-key">File</span>
       <span class="meta-val" id="meta-filename">—</span>
     </div>
     <div class="meta-item">
@@ -563,7 +544,7 @@
     <div class="empty-state" id="empty-state">
       <div class="empty-icon">📊</div>
       <div class="empty-title">No data loaded</div>
-      <div class="empty-sub">Use Latest/Exact to fetch from IDX, or Upload to parse a PDF you already have.</div>
+      <div class="empty-sub">Tap Fetch for latest, pick a date, or upload a PDF from IDX manually.</div>
     </div>
   </div>
 
@@ -599,13 +580,36 @@
       `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
   })();
 
+  document.getElementById('file-input').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    const btn = document.getElementById('file-btn');
+    if (file) {
+      selectedFile = file;
+      btn.textContent = `✓ ${file.name}`;
+      btn.classList.add('has-file');
+    } else {
+      selectedFile = null;
+      btn.textContent = 'TAP TO SELECT PDF';
+      btn.classList.remove('has-file');
+    }
+  });
+
   function setMode(m) {
     mode = m;
-    document.getElementById('btn-latest').classList.toggle('active', m === 'latest');
-    document.getElementById('btn-exact').classList.toggle('active', m === 'exact');
-    document.getElementById('btn-upload').classList.toggle('active', m === 'upload');
+    ['latest', 'exact', 'upload'].forEach(id => {
+      document.getElementById(`btn-${id}`).classList.toggle('active', m === id);
+    });
     document.getElementById('date-row').classList.toggle('visible', m === 'exact');
     document.getElementById('upload-row').classList.toggle('visible', m === 'upload');
+
+    const fetchBtn = document.getElementById('fetch-btn');
+    if (m === 'upload') {
+      fetchBtn.textContent = 'PARSE';
+      fetchBtn.classList.add('upload-mode');
+    } else {
+      fetchBtn.textContent = 'FETCH';
+      fetchBtn.classList.remove('upload-mode');
+    }
   }
 
   function toggleView() {
@@ -614,43 +618,44 @@
     if (allRows.length) renderTable(allColumns, allRows);
   }
 
-  function onFilePick(input) {
-    const file = input.files && input.files[0];
-    const label = document.getElementById('upload-label');
-    if (file) {
-      selectedFile = file;
-      label.textContent = `📄 ${file.name}`;
-      label.classList.add('has-file');
+  async function doAction() {
+    if (mode === 'upload') {
+      await doUpload();
     } else {
-      selectedFile = null;
-      label.textContent = 'Tap to select PDF…';
-      label.classList.remove('has-file');
+      await doFetch();
+    }
+  }
+
+  async function doUpload() {
+    hideError();
+    if (!selectedFile) {
+      showError('Please select a PDF file first.');
+      return;
+    }
+    setSpinner(true, 'Uploading & parsing…');
+
+    const formData = new FormData();
+    formData.append('file', selectedFile);
+
+    try {
+      const res = await fetch(`${API_BASE}/api/upload`, {
+        method: 'POST',
+        body: formData
+      });
+      const data = await res.json();
+      if (!res.ok) { showError(data.error || 'Upload failed'); return; }
+      applyResponse(data);
+    } catch (e) {
+      showError(`Network error: ${e.message}`);
+    } finally {
+      setSpinner(false);
     }
   }
 
   async function doFetch() {
     hideError();
-
-    if (mode === 'upload') {
-      if (!selectedFile) { showError('Please select a PDF file first.'); return; }
-      setSpinner(true, 'Uploading & parsing…');
-      try {
-        const fd = new FormData();
-        fd.append('file', selectedFile);
-        const res = await fetch(`${API_BASE}/api/upload`, { method: 'POST', body: fd });
-        const data = await res.json();
-        if (!res.ok) { showError(data.error || 'Upload failed'); return; }
-        handleData(data);
-      } catch (e) {
-        showError(`Network error: ${e.message}`);
-      } finally {
-        setSpinner(false);
-      }
-      return;
-    }
-
-    // Latest or exact
     setSpinner(true, 'Fetching from IDX…');
+
     const body = { mode };
     if (mode === 'exact') {
       body.date = document.getElementById('date-input').value.trim();
@@ -665,7 +670,7 @@
       });
       const data = await res.json();
       if (!res.ok) { showError(data.error || 'Unknown error'); return; }
-      handleData(data);
+      applyResponse(data);
     } catch (e) {
       showError(`Network error: ${e.message}`);
     } finally {
@@ -673,7 +678,7 @@
     }
   }
 
-  function handleData(data) {
+  function applyResponse(data) {
     document.getElementById('meta-filename').textContent = data.meta.fileName || '—';
     document.getElementById('meta-date').textContent =
       (data.meta.announcementDate || '—').substring(0, 10) || '—';
