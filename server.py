@@ -1,7 +1,6 @@
 import os, sys, traceback
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
-from werkzeug.utils import secure_filename
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -10,13 +9,12 @@ os.makedirs("results", exist_ok=True)
 os.makedirs("static", exist_ok=True)
 
 app = Flask(__name__, static_folder="static", static_url_path="")
-app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024  # 50 MB upload cap
+app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024  # 50 MB
 CORS(app)
 
 _fetch_idx_pdf = None
 _parse_shareholder_pdf = None
 _import_error = None
-
 
 def _lazy_import():
     global _fetch_idx_pdf, _parse_shareholder_pdf, _import_error
@@ -32,17 +30,6 @@ def _lazy_import():
         _import_error = f"{e}\n{traceback.format_exc()}"
         print(f"[IMPORT ERROR] {_import_error}", flush=True)
         return False
-
-
-def _df_to_response(df, meta, logs):
-    rows = df.where(df.notna(), None).to_dict(orient="records")
-    return jsonify({
-        "meta": meta,
-        "columns": list(df.columns),
-        "rows": rows,
-        "totalRows": len(rows),
-        "logs": logs,
-    })
 
 
 @app.route("/health")
@@ -83,52 +70,59 @@ def fetch():
     except Exception as e:
         return jsonify({"error": f"Fetch error: {e}"}), 500
 
-    try:
-        logs = []
-        df = _parse_shareholder_pdf(result["savedPath"],
-                                    log_callback=lambda m: logs.append(m))
-    except Exception as e:
-        return jsonify({"error": f"Parse error: {e}"}), 500
-
-    return _df_to_response(df, {
+    return _parse_and_respond(result["savedPath"], meta={
         "title": result.get("title"),
         "announcementDate": result.get("announcementDate"),
         "fileName": result.get("fileName"),
-    }, logs)
+    })
 
 
 @app.route("/api/upload", methods=["POST"])
 def upload():
-    """Parse an uploaded PDF instead of fetching from IDX."""
     if not _lazy_import():
         return jsonify({"error": f"Server module failed to load: {_import_error}"}), 500
 
     if "file" not in request.files:
-        return jsonify({"error": "No file uploaded"}), 400
+        return jsonify({"error": "No file uploaded. Use form field 'file'."}), 400
 
     f = request.files["file"]
-    if not f or f.filename == "":
-        return jsonify({"error": "No file selected"}), 400
+    if not f.filename:
+        return jsonify({"error": "Empty filename"}), 400
 
     if not f.filename.lower().endswith(".pdf"):
-        return jsonify({"error": "File must be a PDF"}), 400
+        return jsonify({"error": "Only PDF files are allowed"}), 400
 
-    filename = secure_filename(f.filename)
-    save_path = os.path.join("downloads", filename)
-    f.save(save_path)
-
+    safe_name = os.path.basename(f.filename).replace(" ", "_")
+    save_path = os.path.join("downloads", safe_name)
     try:
-        logs = []
-        df = _parse_shareholder_pdf(save_path,
-                                    log_callback=lambda m: logs.append(m))
+        f.save(save_path)
     except Exception as e:
-        return jsonify({"error": f"Parse error: {e}"}), 500
+        return jsonify({"error": f"Failed to save file: {e}"}), 500
 
-    return _df_to_response(df, {
-        "title": "Uploaded PDF",
+    return _parse_and_respond(save_path, meta={
+        "title": "Manual upload",
         "announcementDate": "",
-        "fileName": filename,
-    }, logs)
+        "fileName": safe_name,
+    })
+
+
+def _parse_and_respond(pdf_path, meta):
+    try:
+        log_messages = []
+        df = _parse_shareholder_pdf(pdf_path, log_callback=lambda m: log_messages.append(m))
+    except Exception as e:
+        return jsonify({"error": f"Parse error: {e}\n{traceback.format_exc()}"}), 500
+
+    rows = df.where(df.notna(), None).to_dict(orient="records")
+    columns = list(df.columns)
+
+    return jsonify({
+        "meta": meta,
+        "columns": columns,
+        "rows": rows,
+        "totalRows": len(rows),
+        "logs": log_messages,
+    })
 
 
 if __name__ == "__main__":
