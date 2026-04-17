@@ -1,25 +1,26 @@
 import os, sys, traceback
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
+from werkzeug.utils import secure_filename
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-# Ensure writable dirs exist BEFORE importing heavy modules
 os.makedirs("downloads", exist_ok=True)
 os.makedirs("results", exist_ok=True)
 os.makedirs("static", exist_ok=True)
 
 app = Flask(__name__, static_folder="static", static_url_path="")
+app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024  # 50 MB upload cap
 CORS(app)
 
-# Defer heavy imports so health endpoint always works
 _fetch_idx_pdf = None
 _parse_shareholder_pdf = None
 _import_error = None
 
+
 def _lazy_import():
     global _fetch_idx_pdf, _parse_shareholder_pdf, _import_error
-    if _fetch_idx_pdf is not None:
+    if _parse_shareholder_pdf is not None:
         return True
     try:
         from idx_fetcher import fetch_idx_pdf
@@ -33,6 +34,17 @@ def _lazy_import():
         return False
 
 
+def _df_to_response(df, meta, logs):
+    rows = df.where(df.notna(), None).to_dict(orient="records")
+    return jsonify({
+        "meta": meta,
+        "columns": list(df.columns),
+        "rows": rows,
+        "totalRows": len(rows),
+        "logs": logs,
+    })
+
+
 @app.route("/health")
 def health():
     return "ok", 200
@@ -42,7 +54,7 @@ def health():
 def index():
     if os.path.exists(os.path.join("static", "index.html")):
         return send_from_directory("static", "index.html")
-    return "<h1>IDX Parser</h1><p>Static index.html not found. Check your repo.</p>", 200
+    return "<h1>IDX Parser</h1><p>Static index.html not found.</p>", 200
 
 
 @app.route("/api/fetch", methods=["POST"])
@@ -72,26 +84,51 @@ def fetch():
         return jsonify({"error": f"Fetch error: {e}"}), 500
 
     try:
-        log_messages = []
+        logs = []
         df = _parse_shareholder_pdf(result["savedPath"],
-                                    log_callback=lambda m: log_messages.append(m))
+                                    log_callback=lambda m: logs.append(m))
     except Exception as e:
         return jsonify({"error": f"Parse error: {e}"}), 500
 
-    rows = df.where(df.notna(), None).to_dict(orient="records")
-    columns = list(df.columns)
+    return _df_to_response(df, {
+        "title": result.get("title"),
+        "announcementDate": result.get("announcementDate"),
+        "fileName": result.get("fileName"),
+    }, logs)
 
-    return jsonify({
-        "meta": {
-            "title": result.get("title"),
-            "announcementDate": result.get("announcementDate"),
-            "fileName": result.get("fileName"),
-        },
-        "columns": columns,
-        "rows": rows,
-        "totalRows": len(rows),
-        "logs": log_messages,
-    })
+
+@app.route("/api/upload", methods=["POST"])
+def upload():
+    """Parse an uploaded PDF instead of fetching from IDX."""
+    if not _lazy_import():
+        return jsonify({"error": f"Server module failed to load: {_import_error}"}), 500
+
+    if "file" not in request.files:
+        return jsonify({"error": "No file uploaded"}), 400
+
+    f = request.files["file"]
+    if not f or f.filename == "":
+        return jsonify({"error": "No file selected"}), 400
+
+    if not f.filename.lower().endswith(".pdf"):
+        return jsonify({"error": "File must be a PDF"}), 400
+
+    filename = secure_filename(f.filename)
+    save_path = os.path.join("downloads", filename)
+    f.save(save_path)
+
+    try:
+        logs = []
+        df = _parse_shareholder_pdf(save_path,
+                                    log_callback=lambda m: logs.append(m))
+    except Exception as e:
+        return jsonify({"error": f"Parse error: {e}"}), 500
+
+    return _df_to_response(df, {
+        "title": "Uploaded PDF",
+        "announcementDate": "",
+        "fileName": filename,
+    }, logs)
 
 
 if __name__ == "__main__":

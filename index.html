@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"/>
+<title>IDX Shareholder Parser</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg:        #0a0c0f;
+    --surface:   #111318;
+    --border:    #1e2229;
+    --border2:   #272c35;
+    --accent:    #00c896;
+    --accent2:   #0087ff;
+    --warn:      #ff4d4d;
+    --warn-soft: rgba(255,77,77,0.12);
+    --pos:       #00c896;
+    --neg:       #ff4d4d;
+    --zero:      #6b7280;
+    --text:      #e2e8f0;
+    --text2:     #8892a4;
+    --text3:     #4b5563;
+    --mono:      'IBM Plex Mono', monospace;
+    --sans:      'IBM Plex Sans', sans-serif;
+    --radius:    8px;
+    --safe-top:  env(safe-area-inset-top, 0px);
+    --safe-bot:  env(safe-area-inset-bottom, 0px);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    height: 100%;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  .app {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    padding-top: var(--safe-top);
+    padding-bottom: var(--safe-bot);
+  }
+
+  header {
+    flex-shrink: 0;
+    padding: 16px 18px 14px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .logo-mark {
+    width: 32px; height: 32px;
+    background: var(--accent);
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .logo-mark svg { width: 18px; height: 18px; stroke: #0a0c0f; stroke-width: 2.5; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .header-text h1 {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text);
+  }
+  .header-text p {
+    font-size: 11px;
+    color: var(--text3);
+    font-family: var(--mono);
+    margin-top: 1px;
+  }
+  .header-pill {
+    margin-left: auto;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--accent);
+    background: rgba(0,200,150,0.1);
+    border: 1px solid rgba(0,200,150,0.25);
+    border-radius: 20px;
+    padding: 3px 9px;
+    letter-spacing: 0.06em;
+  }
+
+  .controls {
+    flex-shrink: 0;
+    padding: 14px 18px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .mode-row {
+    display: flex;
+    gap: 8px;
+  }
+
+  .mode-btn {
+    flex: 1;
+    padding: 9px 0;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.05em;
+    border-radius: var(--radius);
+    border: 1px solid var(--border2);
+    background: transparent;
+    color: var(--text2);
+    cursor: pointer;
+    transition: all 0.18s ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .mode-btn.active {
+    background: rgba(0,200,150,0.12);
+    border-color: rgba(0,200,150,0.4);
+    color: var(--accent);
+  }
+
+  .date-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    overflow: hidden;
+    max-height: 0;
+    opacity: 0;
+    transition: max-height 0.25s ease, opacity 0.2s ease;
+  }
+  .date-row.visible {
+    max-height: 48px;
+    opacity: 1;
+  }
+  .date-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text3);
+    white-space: nowrap;
+    letter-spacing: 0.04em;
+  }
+  .date-input {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border2);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    padding: 8px 10px;
+    outline: none;
+    -webkit-appearance: none;
+    transition: border-color 0.15s;
+  }
+  .date-input:focus {
+    border-color: var(--accent2);
+  }
+
+  .upload-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    overflow: hidden;
+    max-height: 0;
+    opacity: 0;
+    transition: max-height 0.25s ease, opacity 0.2s ease;
+  }
+  .upload-row.visible {
+    max-height: 48px;
+    opacity: 1;
+  }
+  .upload-btn {
+    flex: 1;
+    padding: 10px 12px;
+    background: var(--bg);
+    border: 1px dashed var(--border2);
+    border-radius: var(--radius);
+    color: var(--text2);
+    font-family: var(--mono);
+    font-size: 12px;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.15s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .upload-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .upload-btn.has-file {
+    border-style: solid;
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .action-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .fetch-btn {
+    flex-shrink: 0;
+    padding: 10px 22px;
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    background: var(--accent);
+    color: #0a0c0f;
+    border: none;
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: opacity 0.15s, transform 0.1s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .fetch-btn:active { transform: scale(0.97); }
+  .fetch-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .view-toggle {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+  }
+  .toggle-track {
+    width: 34px; height: 20px;
+    background: var(--border2);
+    border-radius: 10px;
+    position: relative;
+    transition: background 0.2s;
+    flex-shrink: 0;
+  }
+  .toggle-track.on { background: rgba(0,200,150,0.35); }
+  .toggle-thumb {
+    position: absolute;
+    top: 3px; left: 3px;
+    width: 14px; height: 14px;
+    background: var(--text2);
+    border-radius: 50%;
+    transition: transform 0.2s, background 0.2s;
+  }
+  .toggle-track.on .toggle-thumb {
+    transform: translateX(14px);
+    background: var(--accent);
+  }
+  .view-toggle-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text2);
+    letter-spacing: 0.04em;
+  }
+
+  .meta-bar {
+    flex-shrink: 0;
+    background: rgba(0,135,255,0.06);
+    border-bottom: 1px solid rgba(0,135,255,0.15);
+    padding: 8px 18px;
+    display: none;
+    gap: 16px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .meta-bar.visible { display: flex; }
+  .meta-item {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+  .meta-key {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--text3);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .meta-val {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent2);
+  }
+
+  .error-banner {
+    flex-shrink: 0;
+    background: var(--warn-soft);
+    border-bottom: 1px solid rgba(255,77,77,0.25);
+    padding: 10px 18px;
+    display: none;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .error-banner.visible { display: flex; }
+  .error-icon { color: var(--warn); font-size: 14px; flex-shrink: 0; margin-top: 1px; }
+  .error-msg {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--warn);
+    line-height: 1.5;
+    word-break: break-word;
+  }
+
+  .table-wrapper {
+    flex: 1;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+    position: relative;
+  }
+
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    gap: 12px;
+    padding: 40px;
+    text-align: center;
+  }
+  .empty-icon {
+    width: 56px; height: 56px;
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 24px;
+  }
+  .empty-title {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--text2);
+    letter-spacing: 0.04em;
+  }
+  .empty-sub {
+    font-size: 12px;
+    color: var(--text3);
+    line-height: 1.6;
+    max-width: 260px;
+  }
+
+  table {
+    width: max-content;
+    min-width: 100%;
+    border-collapse: collapse;
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  thead {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  thead th {
+    background: #0f1216;
+    color: var(--text3);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 9px 14px;
+    text-align: left;
+    white-space: nowrap;
+    border-bottom: 1px solid var(--border2);
+    border-right: 1px solid var(--border);
+  }
+  thead th:last-child { border-right: none; }
+  thead th.num { text-align: right; }
+
+  tbody tr {
+    border-bottom: 1px solid var(--border);
+    transition: background 0.1s;
+  }
+  tbody tr:hover { background: rgba(255,255,255,0.02); }
+
+  tbody td {
+    padding: 8px 14px;
+    white-space: nowrap;
+    color: var(--text);
+    border-right: 1px solid var(--border);
+  }
+  tbody td:last-child { border-right: none; }
+  tbody td.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+  tbody tr.sep td {
+    background: transparent;
+    padding: 4px 0;
+    border-bottom: 1px solid var(--border2);
+  }
+
+  .tag-pos { color: var(--pos); }
+  .tag-neg { color: var(--neg); }
+  .tag-zero { color: var(--zero); }
+
+  .badge-no {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px; height: 22px;
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 4px;
+    font-size: 10px;
+    color: var(--text3);
+  }
+
+  .spinner-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(10,12,15,0.7);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 16px;
+    z-index: 100;
+    backdrop-filter: blur(3px);
+  }
+  .spinner-overlay.visible { display: flex; }
+  .spinner-ring {
+    width: 42px; height: 42px;
+    border: 2px solid var(--border2);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spinner-label {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text2);
+    letter-spacing: 0.06em;
+  }
+
+  .log-drawer {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: #0d0f13;
+    border-top: 1px solid var(--border2);
+    height: 180px;
+    transform: translateY(100%);
+    transition: transform 0.3s ease;
+    z-index: 90;
+    display: flex;
+    flex-direction: column;
+    padding-bottom: var(--safe-bot);
+  }
+  .log-drawer.open { transform: translateY(0); }
+  .log-header {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .log-title {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text3);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .log-close {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text3);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 2px 6px;
+  }
+  .log-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px 16px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .log-entry {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text2);
+    line-height: 1.7;
+  }
+  .log-entry::before { content: '› '; color: var(--accent); }
+
+  .hidden-input { display: none; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header>
+    <div class="logo-mark">
+      <svg viewBox="0 0 24 24"><path d="M3 17l5-5 4 4 9-9"/><path d="M21 7h-6M21 7v6"/></svg>
+    </div>
+    <div class="header-text">
+      <h1>IDX Shareholder</h1>
+      <p>Pemegang Saham &gt; 5%</p>
+    </div>
+    <div class="header-pill">IDX · BEI</div>
+  </header>
+
+  <div class="controls">
+    <div class="mode-row">
+      <button class="mode-btn active" id="btn-latest" onclick="setMode('latest')">⚡ Latest</button>
+      <button class="mode-btn" id="btn-exact" onclick="setMode('exact')">📅 Exact</button>
+      <button class="mode-btn" id="btn-upload" onclick="setMode('upload')">📎 Upload</button>
+    </div>
+
+    <div class="date-row" id="date-row">
+      <span class="date-label">DATE</span>
+      <input class="date-input" type="date" id="date-input"/>
+    </div>
+
+    <div class="upload-row" id="upload-row">
+      <label class="upload-btn" id="upload-label" for="file-input">Tap to select PDF…</label>
+      <input class="hidden-input" type="file" id="file-input" accept="application/pdf" onchange="onFilePick(this)"/>
+    </div>
+
+    <div class="action-row">
+      <button class="fetch-btn" id="fetch-btn" onclick="doFetch()">RUN</button>
+
+      <div class="view-toggle" onclick="toggleView()">
+        <div class="toggle-track on" id="toggle-track">
+          <div class="toggle-thumb"></div>
+        </div>
+        <span class="view-toggle-label">SIMPLE</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="meta-bar" id="meta-bar">
+    <div class="meta-item">
+      <span class="meta-key">Filename</span>
+      <span class="meta-val" id="meta-filename">—</span>
+    </div>
+    <div class="meta-item">
+      <span class="meta-key">Date</span>
+      <span class="meta-val" id="meta-date">—</span>
+    </div>
+    <div class="meta-item">
+      <span class="meta-key">Rows</span>
+      <span class="meta-val" id="meta-rows">—</span>
+    </div>
+  </div>
+
+  <div class="error-banner" id="error-banner">
+    <span class="error-icon">⚠</span>
+    <span class="error-msg" id="error-msg"></span>
+  </div>
+
+  <div class="table-wrapper" id="table-wrapper">
+    <div class="empty-state" id="empty-state">
+      <div class="empty-icon">📊</div>
+      <div class="empty-title">No data loaded</div>
+      <div class="empty-sub">Use Latest/Exact to fetch from IDX, or Upload to parse a PDF you already have.</div>
+    </div>
+  </div>
+
+</div>
+
+<div class="spinner-overlay" id="spinner">
+  <div class="spinner-ring"></div>
+  <div class="spinner-label" id="spinner-label">Processing…</div>
+</div>
+
+<div class="log-drawer" id="log-drawer">
+  <div class="log-header">
+    <span class="log-title">Processing Log</span>
+    <button class="log-close" onclick="closeLog()">CLOSE</button>
+  </div>
+  <div class="log-body" id="log-body"></div>
+</div>
+
+<script>
+  let mode = 'latest';
+  let simpleView = true;
+  let allColumns = [];
+  let allRows = [];
+  let selectedFile = null;
+
+  const SIMPLE_COLS = ['No', 'Nama Pemegang Rekening Efek', 'Perubahan'];
+  const API_BASE = window.location.origin;
+
+  (function () {
+    const d = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    document.getElementById('date-input').value =
+      `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  })();
+
+  function setMode(m) {
+    mode = m;
+    document.getElementById('btn-latest').classList.toggle('active', m === 'latest');
+    document.getElementById('btn-exact').classList.toggle('active', m === 'exact');
+    document.getElementById('btn-upload').classList.toggle('active', m === 'upload');
+    document.getElementById('date-row').classList.toggle('visible', m === 'exact');
+    document.getElementById('upload-row').classList.toggle('visible', m === 'upload');
+  }
+
+  function toggleView() {
+    simpleView = !simpleView;
+    document.getElementById('toggle-track').classList.toggle('on', simpleView);
+    if (allRows.length) renderTable(allColumns, allRows);
+  }
+
+  function onFilePick(input) {
+    const file = input.files && input.files[0];
+    const label = document.getElementById('upload-label');
+    if (file) {
+      selectedFile = file;
+      label.textContent = `📄 ${file.name}`;
+      label.classList.add('has-file');
+    } else {
+      selectedFile = null;
+      label.textContent = 'Tap to select PDF…';
+      label.classList.remove('has-file');
+    }
+  }
+
+  async function doFetch() {
+    hideError();
+
+    if (mode === 'upload') {
+      if (!selectedFile) { showError('Please select a PDF file first.'); return; }
+      setSpinner(true, 'Uploading & parsing…');
+      try {
+        const fd = new FormData();
+        fd.append('file', selectedFile);
+        const res = await fetch(`${API_BASE}/api/upload`, { method: 'POST', body: fd });
+        const data = await res.json();
+        if (!res.ok) { showError(data.error || 'Upload failed'); return; }
+        handleData(data);
+      } catch (e) {
+        showError(`Network error: ${e.message}`);
+      } finally {
+        setSpinner(false);
+      }
+      return;
+    }
+
+    // Latest or exact
+    setSpinner(true, 'Fetching from IDX…');
+    const body = { mode };
+    if (mode === 'exact') {
+      body.date = document.getElementById('date-input').value.trim();
+      if (!body.date) { showError('Please select a date.'); setSpinner(false); return; }
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/api/fetch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const data = await res.json();
+      if (!res.ok) { showError(data.error || 'Unknown error'); return; }
+      handleData(data);
+    } catch (e) {
+      showError(`Network error: ${e.message}`);
+    } finally {
+      setSpinner(false);
+    }
+  }
+
+  function handleData(data) {
+    document.getElementById('meta-filename').textContent = data.meta.fileName || '—';
+    document.getElementById('meta-date').textContent =
+      (data.meta.announcementDate || '—').substring(0, 10) || '—';
+    document.getElementById('meta-rows').textContent = data.totalRows;
+    document.getElementById('meta-bar').classList.add('visible');
+
+    allColumns = data.columns;
+    allRows = data.rows;
+    renderTable(allColumns, allRows);
+
+    if (data.logs && data.logs.length) {
+      const lb = document.getElementById('log-body');
+      lb.innerHTML = data.logs.map(l =>
+        `<div class="log-entry">${escHtml(l)}</div>`).join('');
+      document.getElementById('log-drawer').classList.add('open');
+    }
+  }
+
+  function renderTable(columns, rows) {
+    const wrapper = document.getElementById('table-wrapper');
+    const empty = document.getElementById('empty-state');
+    if (empty) empty.remove();
+
+    let visibleCols = simpleView
+      ? SIMPLE_COLS.filter(c => columns.includes(c) || c === 'No')
+      : ['No', ...columns.filter(c => c !== 'No')];
+
+    const numericCols = new Set();
+    for (const col of columns) {
+      const sample = rows.find(r => r[col] != null && r[col] !== '');
+      if (sample && typeof sample[col] === 'number') numericCols.add(col);
+    }
+
+    const emitenKey = columns.includes('Kode Efek') ? 'Kode Efek' : null;
+
+    let html = '<table><thead><tr>';
+    for (const col of visibleCols) {
+      const isNum = numericCols.has(col) || col === 'No';
+      html += `<th class="${isNum ? 'num' : ''}">${escHtml(col)}</th>`;
+    }
+    html += '</tr></thead><tbody>';
+
+    let prevEmiten = null;
+    let rowNo = 1;
+
+    for (const row of rows) {
+      const curEmiten = emitenKey ? row[emitenKey] : null;
+
+      if (prevEmiten !== null && curEmiten !== prevEmiten) {
+        html += `<tr class="sep">${visibleCols.map(() => '<td></td>').join('')}</tr>`;
+      }
+
+      let tag = 'tag-zero';
+      const perubahan = row['Perubahan'];
+      if (perubahan != null && perubahan !== '' && !isNaN(+perubahan)) {
+        const v = +perubahan;
+        tag = v > 0 ? 'tag-pos' : v < 0 ? 'tag-neg' : 'tag-zero';
+      }
+
+      html += '<tr>';
+      for (const col of visibleCols) {
+        const isNum = numericCols.has(col) || col === 'No';
+        let val = col === 'No' ? rowNo : row[col];
+        val = val == null ? '' : val;
+
+        let display = '';
+        if (col === 'No') {
+          display = `<span class="badge-no">${rowNo}</span>`;
+        } else if (col === 'Perubahan' && val !== '') {
+          display = `<span class="${tag}">${formatNum(val, true)}</span>`;
+        } else if (isNum && val !== '') {
+          display = formatNum(val, false);
+        } else {
+          display = escHtml(String(val));
+        }
+
+        html += `<td class="${isNum ? 'num' : ''}">${display}</td>`;
+      }
+      html += '</tr>';
+
+      prevEmiten = curEmiten;
+      rowNo++;
+    }
+
+    html += '</tbody></table>';
+    wrapper.innerHTML = html;
+  }
+
+  function formatNum(val, withSign) {
+    const n = +val;
+    if (isNaN(n)) return escHtml(String(val));
+    const isInt = Number.isInteger(n);
+    const abs = Math.abs(n);
+    const formatted = isInt
+      ? abs.toLocaleString('id-ID')
+      : abs.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const sign = withSign ? (n > 0 ? '+' : n < 0 ? '−' : '') : '';
+    return `${sign}${formatted}`;
+  }
+
+  function escHtml(s) {
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function setSpinner(on, label) {
+    document.getElementById('spinner').classList.toggle('visible', on);
+    if (label) document.getElementById('spinner-label').textContent = label;
+    document.getElementById('fetch-btn').disabled = on;
+  }
+
+  function showError(msg) {
+    document.getElementById('error-msg').textContent = msg;
+    document.getElementById('error-banner').classList.add('visible');
+  }
+  function hideError() {
+    document.getElementById('error-banner').classList.remove('visible');
+  }
+
+  function closeLog() {
+    document.getElementById('log-drawer').classList.remove('open');
+  }
+</script>
+</body>
+</html>
